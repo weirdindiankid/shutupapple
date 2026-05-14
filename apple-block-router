@@ -1,0 +1,31 @@
+#!/bin/sh
+CONF="/etc/shutupapple.conf"
+DEST="/tmp/dnsmasq.d/shutupapple"
+
+case "$1" in
+    on|block|enable)
+        cp "$CONF" "$DEST"
+        /etc/init.d/dnsmasq restart
+        echo "BLOCKED. Apple telemetry sinkholed at router level for all devices."
+        ;;
+    off|unblock|disable)
+        rm -f "$DEST"
+        /etc/init.d/dnsmasq restart
+        echo "UNBLOCKED. Apple telemetry restored at router level."
+        ;;
+    status)
+        if [ -f "$DEST" ]; then
+            count=$(grep -c "address=" "$DEST")
+            echo "ACTIVE: $count Apple domains sinkholed at router level"
+        else
+            echo "INACTIVE: Apple telemetry not blocked at router level"
+        fi
+        ;;
+    *)
+        echo "Usage: apple-block-router [on|off|status]"
+        echo "  on     - Sinkhole Apple telemetry domains for ALL devices on the network"
+        echo "  off    - Remove sinkhole"
+        echo "  status - Show current state"
+        exit 1
+        ;;
+esac

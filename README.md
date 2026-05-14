@@ -86,6 +86,24 @@ sudo launchctl unload /Library/LaunchDaemons/com.shutupapple.kill-apple.plist
 sudo rm /Library/LaunchDaemons/com.shutupapple.kill-apple.plist
 ```
 
+## Optional: OpenWrt router-level block
+
+Block Apple telemetry for every device on your network via dnsmasq on OpenWrt.
+
+```bash
+# Copy files to your router
+ssh root@192.168.8.1 'cat > /etc/shutupapple.conf' < openwrt-shutupapple.conf
+ssh root@192.168.8.1 'cat > /usr/bin/apple-block-router && chmod +x /usr/bin/apple-block-router' < apple-block-router
+
+# Persist across reboots (add to rc.local before the "exit 0" line)
+ssh root@192.168.8.1 'echo "[ -f /etc/shutupapple.conf ] && cp /etc/shutupapple.conf /tmp/dnsmasq.d/shutupapple" >> /etc/rc.local'
+
+# Toggle
+ssh root@192.168.8.1 'apple-block-router on'      # block all devices
+ssh root@192.168.8.1 'apple-block-router off'     # restore
+ssh root@192.168.8.1 'apple-block-router status'  # check
+```
+
 ## Optional: pf firewall rules for AirPlay
 
 If you want to block AirPlay device discovery at the network level (so your neighbors' Apple TVs stop showing up as audio outputs), add the following to `/etc/pf.conf` after all `dummynet-anchor` lines but before any `anchor` lines:
