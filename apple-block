@@ -4,6 +4,8 @@ set -e
 HOSTS_FILE="/etc/hosts"
 MARKER_START="# >>> APPLE-BLOCK-START <<<"
 MARKER_END="# >>> APPLE-BLOCK-END <<<"
+KILL_SCRIPT="/usr/local/bin/kill-airplay.sh"
+KILL_PLIST="/Library/LaunchDaemons/com.shutupapple.kill-apple.plist"
 
 APPLE_DOMAINS=(
     # Telemetry and analytics
@@ -50,13 +52,20 @@ APPLE_DOMAINS=(
     courier2.push.apple.com
 )
 
-block() {
-    echo "Blocking Apple telemetry..."
+APPLE_PROCS=(
+    analyticsd
+    diagnosticd
+    symptomsd
+    submissionsd
+    AirPlayXPCHelper
+    AirPlayUIAgent
+    rapportd
+    apsd
+)
 
-    # /etc/hosts sinkhole
+sinkhole_hosts() {
     if grep -q "$MARKER_START" "$HOSTS_FILE" 2>/dev/null; then
-        echo "  /etc/hosts: already blocked, refreshing..."
-        unblock_hosts_silent
+        sed -i '' "/$MARKER_START/,/$MARKER_END/d" "$HOSTS_FILE"
     fi
     {
         echo "$MARKER_START"
@@ -66,94 +75,185 @@ block() {
         done
         echo "$MARKER_END"
     } >> "$HOSTS_FILE"
-    echo "  /etc/hosts: $(grep -c '0.0.0.0' <<< "$(sed -n "/$MARKER_START/,/$MARKER_END/p" "$HOSTS_FILE")") domains sinkholed"
-
-    # Flush DNS cache
-    killall -HUP mDNSResponder 2>/dev/null || true
-    echo "  DNS cache flushed"
-
-    # Kill Apple telemetry and phone-home processes
-    killall -9 analyticsd 2>/dev/null || true
-    killall -9 diagnosticd 2>/dev/null || true
-    killall -9 symptomsd 2>/dev/null || true
-    killall -9 submissionsd 2>/dev/null || true
-    killall -9 AirPlayXPCHelper 2>/dev/null || true
-    killall -9 AirPlayUIAgent 2>/dev/null || true
-    killall -9 rapportd 2>/dev/null || true
-    killall -9 apsd 2>/dev/null || true
-    echo "  Killed Apple telemetry and push notification processes"
-
-    # Disable Apple push notification daemon and AirPlay services across reboots
-    launchctl disable system/com.apple.apsd 2>/dev/null || true
-    launchctl disable system/com.apple.AirPlayXPCHelper 2>/dev/null || true
-    launchctl disable system/com.apple.rapportd 2>/dev/null || true
-    launchctl disable "gui/$(id -u)/com.apple.AirPlayUIAgent" 2>/dev/null || true
-    launchctl disable "gui/$(id -u)/com.apple.rapportd" 2>/dev/null || true
-    echo "  Disabled Apple daemons (persistent across reboots)"
-
-    echo ""
-    echo "BLOCKED. Run 'sudo apple-block off' to undo."
+    local count
+    count=$(grep -c '0.0.0.0' <<< "$(sed -n "/$MARKER_START/,/$MARKER_END/p" "$HOSTS_FILE")")
+    echo "  /etc/hosts: $count domains sinkholed"
 }
 
-unblock_hosts_silent() {
-    sed -i '' "/$MARKER_START/,/$MARKER_END/d" "$HOSTS_FILE"
-}
-
-unblock() {
-    echo "Unblocking Apple telemetry..."
-
+unsinkhole_hosts() {
     if grep -q "$MARKER_START" "$HOSTS_FILE" 2>/dev/null; then
-        unblock_hosts_silent
+        sed -i '' "/$MARKER_START/,/$MARKER_END/d" "$HOSTS_FILE"
         echo "  /etc/hosts: sinkhole removed"
     else
         echo "  /etc/hosts: nothing to remove"
     fi
+}
 
-    # Re-enable Apple daemons
+kill_once() {
+    for proc in "${APPLE_PROCS[@]}"; do
+        killall -9 "$proc" 2>/dev/null || true
+    done
+    echo "  Killed Apple processes (one-shot)"
+}
+
+disable_daemons() {
+    launchctl disable system/com.apple.apsd 2>/dev/null || true
+    launchctl disable system/com.apple.AirPlayXPCHelper 2>/dev/null || true
+    launchctl disable system/com.apple.rapportd 2>/dev/null || true
+    local uid
+    uid=$(id -u)
+    launchctl disable "gui/$uid/com.apple.AirPlayUIAgent" 2>/dev/null || true
+    launchctl disable "gui/$uid/com.apple.rapportd" 2>/dev/null || true
+    echo "  Disabled Apple daemons (persistent across reboots)"
+}
+
+enable_daemons() {
     launchctl enable system/com.apple.apsd 2>/dev/null || true
     launchctl enable system/com.apple.AirPlayXPCHelper 2>/dev/null || true
     launchctl enable system/com.apple.rapportd 2>/dev/null || true
-    launchctl enable "gui/$(id -u)/com.apple.AirPlayUIAgent" 2>/dev/null || true
-    launchctl enable "gui/$(id -u)/com.apple.rapportd" 2>/dev/null || true
+    local uid
+    uid=$(id -u)
+    launchctl enable "gui/$uid/com.apple.AirPlayUIAgent" 2>/dev/null || true
+    launchctl enable "gui/$uid/com.apple.rapportd" 2>/dev/null || true
     echo "  Re-enabled Apple daemons"
+}
 
+install_kill_daemon() {
+    cat > "$KILL_SCRIPT" <<'KILLEOF'
+#!/bin/bash
+while true; do
+    killall -9 AirPlayXPCHelper 2>/dev/null
+    killall -9 AirPlayUIAgent 2>/dev/null
+    killall -9 rapportd 2>/dev/null
+    killall -9 apsd 2>/dev/null
+    killall -9 analyticsd 2>/dev/null
+    killall -9 symptomsd 2>/dev/null
+    sleep 1
+done
+KILLEOF
+    chmod +x "$KILL_SCRIPT"
+
+    cat > "$KILL_PLIST" <<'PLISTEOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.shutupapple.kill-apple</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/kill-airplay.sh</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/dev/null</string>
+    <key>StandardErrorPath</key>
+    <string>/dev/null</string>
+</dict>
+</plist>
+PLISTEOF
+    chown root:wheel "$KILL_PLIST"
+    chmod 644 "$KILL_PLIST"
+    launchctl unload "$KILL_PLIST" 2>/dev/null || true
+    launchctl load "$KILL_PLIST"
+    echo "  Kill daemon installed and running (kills every 1s)"
+}
+
+remove_kill_daemon() {
+    if [[ -f "$KILL_PLIST" ]]; then
+        launchctl unload "$KILL_PLIST" 2>/dev/null || true
+        rm -f "$KILL_PLIST"
+        echo "  Kill daemon stopped and removed"
+    else
+        echo "  Kill daemon not installed"
+    fi
+    rm -f "$KILL_SCRIPT"
+}
+
+flush_dns() {
     killall -HUP mDNSResponder 2>/dev/null || true
     echo "  DNS cache flushed"
+}
 
+block() {
+    echo "Blocking Apple telemetry..."
+    sinkhole_hosts
+    flush_dns
+    kill_once
+    disable_daemons
     echo ""
-    echo "UNBLOCKED. Run 'sudo apple-block on' to re-enable."
+    echo "BLOCKED. Processes may respawn until next reboot."
+    echo "Use 'sudo apple-block nuclear' to keep them dead now."
+}
+
+nuclear() {
+    echo "Going nuclear on Apple..."
+    sinkhole_hosts
+    flush_dns
+    disable_daemons
+    install_kill_daemon
+    echo ""
+    echo "NUCLEAR. Apple processes will be killed every second."
+    echo "Run 'sudo apple-block off' to undo everything."
+}
+
+unblock() {
+    echo "Unblocking Apple..."
+    remove_kill_daemon
+    unsinkhole_hosts
+    enable_daemons
+    flush_dns
+    echo ""
+    echo "UNBLOCKED. Apple services will fully restore after a reboot."
 }
 
 status() {
-    echo "=== Apple Block Status ==="
+    echo "=== shutupapple status ==="
     if grep -q "$MARKER_START" "$HOSTS_FILE" 2>/dev/null; then
+        local count
         count=$(grep -c '0.0.0.0' <<< "$(sed -n "/$MARKER_START/,/$MARKER_END/p" "$HOSTS_FILE")")
-        echo "  /etc/hosts: ACTIVE ($count domains sinkholed)"
+        echo "  Hosts sinkhole: ACTIVE ($count domains)"
     else
-        echo "  /etc/hosts: INACTIVE"
+        echo "  Hosts sinkhole: INACTIVE"
     fi
 
-    echo "  Apple processes phoning home:"
-    apple_conns=$(lsof -i -n -P 2>/dev/null | grep "ESTABLISHED" | awk '{print $1, $9}' | while read proc addr; do
+    if launchctl list com.shutupapple.kill-apple &>/dev/null; then
+        echo "  Kill daemon: RUNNING (nuclear mode)"
+    else
+        echo "  Kill daemon: not running"
+    fi
+
+    echo "  Active Apple connections (17.* range):"
+    local conns
+    conns=$(lsof -i -n -P 2>/dev/null | grep "ESTABLISHED" | awk '{print $1, $9}' | while read proc addr; do
         ip=$(echo "$addr" | sed 's/.*->//' | cut -d: -f1)
         [[ "$ip" == 17.* ]] && echo "    $proc -> $addr"
     done)
-    if [[ -z "$apple_conns" ]]; then
-        echo "    None. You're clean."
+    if [[ -z "$conns" ]]; then
+        echo "    None. Clean."
     else
-        echo "$apple_conns"
+        echo "$conns"
     fi
 }
 
 case "${1:-}" in
-    on|block|enable)   block ;;
-    off|unblock|disable) unblock ;;
-    status)            status ;;
+    on|block|enable)        block ;;
+    nuclear|nuke|kill)      nuclear ;;
+    off|unblock|disable)    unblock ;;
+    status)                 status ;;
     *)
-        echo "Usage: sudo apple-block [on|off|status]"
-        echo "  on     - Block Apple telemetry, push notifications, and AirPlay"
-        echo "  off    - Restore Apple services"
-        echo "  status - Show current blocking state and any active Apple connections"
+        echo "Usage: sudo apple-block <command>"
+        echo ""
+        echo "Commands:"
+        echo "  on       Block Apple telemetry domains, kill processes once,"
+        echo "           disable daemons for next reboot"
+        echo "  nuclear  All of the above PLUS a persistent kill daemon that"
+        echo "           murders Apple processes every second"
+        echo "  off      Undo everything, restore Apple services"
+        echo "  status   Show current state and any active Apple connections"
         exit 1
         ;;
 esac
