@@ -1,0 +1,159 @@
+#!/bin/bash
+set -e
+
+HOSTS_FILE="/etc/hosts"
+MARKER_START="# >>> APPLE-BLOCK-START <<<"
+MARKER_END="# >>> APPLE-BLOCK-END <<<"
+
+APPLE_DOMAINS=(
+    # Telemetry and analytics
+    metrics.apple.com
+    metrics.icloud.com
+    xp.apple.com
+    securemetrics.apple.com
+    supportmetrics.apple.com
+    diagnosics.apple.com
+    idiagnostics.apple.com
+    iphonesubmissions.apple.com
+    radarsubmissions.apple.com
+    bookkeeper.itunes.apple.com
+    weather-analytics-events.apple.com
+    stats.apple.com
+    pancake.apple.com
+    feedbackws.icloud.com
+    # Siri analytics
+    api-glb-ause.smoot.apple.com
+    smoot.apple.com
+    # Location tracking
+    gsp-ssl.ls.apple.com
+    gsp10-ssl.ls.apple.com
+    gsp64-ssl.ls.apple.com
+    gs-loc.apple.com
+    # Ads
+    iadsdk.apple.com
+    tr.iadsdk.apple.com
+    iad.apple.com
+    advertising.apple.com
+    banners.itunes.apple.com
+    # Spotlight suggestions / search phone-home
+    api.smoot.apple.com
+    configuration.ls.apple.com
+    # Siri
+    swallow.apple.com
+    # Device analytics
+    xp.icloud.com
+    experiment.apple.com
+    # Push notification server
+    push.apple.com
+    courier.push.apple.com
+    courier1.push.apple.com
+    courier2.push.apple.com
+)
+
+block() {
+    echo "Blocking Apple telemetry..."
+
+    # /etc/hosts sinkhole
+    if grep -q "$MARKER_START" "$HOSTS_FILE" 2>/dev/null; then
+        echo "  /etc/hosts: already blocked, refreshing..."
+        unblock_hosts_silent
+    fi
+    {
+        echo "$MARKER_START"
+        for domain in "${APPLE_DOMAINS[@]}"; do
+            [[ "$domain" == \#* ]] && continue
+            echo "0.0.0.0 $domain"
+        done
+        echo "$MARKER_END"
+    } >> "$HOSTS_FILE"
+    echo "  /etc/hosts: $(grep -c '0.0.0.0' <<< "$(sed -n "/$MARKER_START/,/$MARKER_END/p" "$HOSTS_FILE")") domains sinkholed"
+
+    # Flush DNS cache
+    killall -HUP mDNSResponder 2>/dev/null || true
+    echo "  DNS cache flushed"
+
+    # Kill Apple telemetry and phone-home processes
+    killall -9 analyticsd 2>/dev/null || true
+    killall -9 diagnosticd 2>/dev/null || true
+    killall -9 symptomsd 2>/dev/null || true
+    killall -9 submissionsd 2>/dev/null || true
+    killall -9 AirPlayXPCHelper 2>/dev/null || true
+    killall -9 AirPlayUIAgent 2>/dev/null || true
+    killall -9 rapportd 2>/dev/null || true
+    killall -9 apsd 2>/dev/null || true
+    echo "  Killed Apple telemetry and push notification processes"
+
+    # Disable Apple push notification daemon and AirPlay services across reboots
+    launchctl disable system/com.apple.apsd 2>/dev/null || true
+    launchctl disable system/com.apple.AirPlayXPCHelper 2>/dev/null || true
+    launchctl disable system/com.apple.rapportd 2>/dev/null || true
+    launchctl disable "gui/$(id -u)/com.apple.AirPlayUIAgent" 2>/dev/null || true
+    launchctl disable "gui/$(id -u)/com.apple.rapportd" 2>/dev/null || true
+    echo "  Disabled Apple daemons (persistent across reboots)"
+
+    echo ""
+    echo "BLOCKED. Run 'sudo apple-block off' to undo."
+}
+
+unblock_hosts_silent() {
+    sed -i '' "/$MARKER_START/,/$MARKER_END/d" "$HOSTS_FILE"
+}
+
+unblock() {
+    echo "Unblocking Apple telemetry..."
+
+    if grep -q "$MARKER_START" "$HOSTS_FILE" 2>/dev/null; then
+        unblock_hosts_silent
+        echo "  /etc/hosts: sinkhole removed"
+    else
+        echo "  /etc/hosts: nothing to remove"
+    fi
+
+    # Re-enable Apple daemons
+    launchctl enable system/com.apple.apsd 2>/dev/null || true
+    launchctl enable system/com.apple.AirPlayXPCHelper 2>/dev/null || true
+    launchctl enable system/com.apple.rapportd 2>/dev/null || true
+    launchctl enable "gui/$(id -u)/com.apple.AirPlayUIAgent" 2>/dev/null || true
+    launchctl enable "gui/$(id -u)/com.apple.rapportd" 2>/dev/null || true
+    echo "  Re-enabled Apple daemons"
+
+    killall -HUP mDNSResponder 2>/dev/null || true
+    echo "  DNS cache flushed"
+
+    echo ""
+    echo "UNBLOCKED. Run 'sudo apple-block on' to re-enable."
+}
+
+status() {
+    echo "=== Apple Block Status ==="
+    if grep -q "$MARKER_START" "$HOSTS_FILE" 2>/dev/null; then
+        count=$(grep -c '0.0.0.0' <<< "$(sed -n "/$MARKER_START/,/$MARKER_END/p" "$HOSTS_FILE")")
+        echo "  /etc/hosts: ACTIVE ($count domains sinkholed)"
+    else
+        echo "  /etc/hosts: INACTIVE"
+    fi
+
+    echo "  Apple processes phoning home:"
+    apple_conns=$(lsof -i -n -P 2>/dev/null | grep "ESTABLISHED" | awk '{print $1, $9}' | while read proc addr; do
+        ip=$(echo "$addr" | sed 's/.*->//' | cut -d: -f1)
+        [[ "$ip" == 17.* ]] && echo "    $proc -> $addr"
+    done)
+    if [[ -z "$apple_conns" ]]; then
+        echo "    None. You're clean."
+    else
+        echo "$apple_conns"
+    fi
+}
+
+case "${1:-}" in
+    on|block|enable)   block ;;
+    off|unblock|disable) unblock ;;
+    status)            status ;;
+    *)
+        echo "Usage: sudo apple-block [on|off|status]"
+        echo "  on     - Block Apple telemetry, push notifications, and AirPlay"
+        echo "  off    - Restore Apple services"
+        echo "  status - Show current blocking state and any active Apple connections"
+        exit 1
+        ;;
+esac
