@@ -6,6 +6,9 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_HOME=$(eval echo "~$REAL_USER")
+
 echo "Uninstalling shutupapple..."
 
 apple-block off 2>/dev/null || true
@@ -17,9 +20,18 @@ if [[ -f "$PLIST" ]]; then
     echo "  Removed kill daemon"
 fi
 
+AGENT="$REAL_HOME/Library/LaunchAgents/com.shutupapple.check.plist"
+if [[ -f "$AGENT" ]]; then
+    sudo -u "$REAL_USER" launchctl unload "$AGENT" 2>/dev/null || true
+    rm -f "$AGENT"
+    echo "  Removed login checker"
+fi
+
 rm -f /usr/local/bin/apple-block
+rm -f /usr/local/bin/apple-block-check
 rm -f /usr/local/bin/kill-airplay.sh
-echo "  Removed scripts from /usr/local/bin/"
+rm -rf /usr/local/etc/shutupapple
+echo "  Removed scripts and config from /usr/local/"
 
 launchctl enable system/com.apple.apsd 2>/dev/null || true
 launchctl enable system/com.apple.AirPlayXPCHelper 2>/dev/null || true

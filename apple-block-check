@@ -1,0 +1,23 @@
+#!/bin/bash
+HOSTS_FILE="/etc/hosts"
+MARKER="# >>> APPLE-BLOCK-START <<<"
+KILL_LABEL="com.shutupapple.kill-apple"
+
+problems=""
+
+if ! grep -q "$MARKER" "$HOSTS_FILE" 2>/dev/null; then
+    problems="Hosts sinkhole is missing (macOS update wiped it)"
+fi
+
+if ! launchctl list "$KILL_LABEL" >/dev/null 2>&1; then
+    if [ -n "$problems" ]; then
+        problems="$problems and kill daemon is not running"
+    else
+        problems="Kill daemon is not running"
+    fi
+fi
+
+if [ -n "$problems" ]; then
+    osascript -e "display notification \"$problems. Run: sudo apple-block nuclear\" with title \"shutupapple\" subtitle \"Apple protections are DOWN\""
+    osascript -e 'display dialog "Your Apple telemetry protections have been disabled (probably by a macOS update).\n\nOpen Terminal and run:\n\nsudo apple-block nuclear" with title "shutupapple" with icon caution buttons {"OK"} default button "OK"'
+fi
