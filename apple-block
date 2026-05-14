@@ -6,77 +6,130 @@ MARKER_START="# >>> APPLE-BLOCK-START <<<"
 MARKER_END="# >>> APPLE-BLOCK-END <<<"
 KILL_SCRIPT="/usr/local/bin/kill-airplay.sh"
 KILL_PLIST="/Library/LaunchDaemons/com.shutupapple.kill-apple.plist"
+CONFIG_DIR="/usr/local/etc/shutupapple"
+ALLOWLIST="$CONFIG_DIR/allowed"
+BLOCKLIST="$CONFIG_DIR/blocked"
 
-APPLE_DOMAINS=(
-    # Telemetry and analytics
-    metrics.apple.com
-    metrics.icloud.com
-    xp.apple.com
-    securemetrics.apple.com
-    supportmetrics.apple.com
-    diagnosics.apple.com
-    idiagnostics.apple.com
-    iphonesubmissions.apple.com
-    radarsubmissions.apple.com
-    bookkeeper.itunes.apple.com
-    weather-analytics-events.apple.com
-    stats.apple.com
-    pancake.apple.com
-    feedbackws.icloud.com
-    # Siri analytics
-    api-glb-ause.smoot.apple.com
-    smoot.apple.com
-    # Location tracking
-    gsp-ssl.ls.apple.com
-    gsp10-ssl.ls.apple.com
-    gsp64-ssl.ls.apple.com
-    gs-loc.apple.com
-    # Ads
-    iadsdk.apple.com
-    tr.iadsdk.apple.com
-    iad.apple.com
-    advertising.apple.com
-    banners.itunes.apple.com
-    # Spotlight suggestions / search phone-home
-    api.smoot.apple.com
-    configuration.ls.apple.com
-    # Siri
-    swallow.apple.com
-    # Device analytics
-    xp.icloud.com
-    experiment.apple.com
-    # Push notification server
-    push.apple.com
-    courier.push.apple.com
-    courier1.push.apple.com
-    courier2.push.apple.com
-)
+describe_proc() {
+    case "$1" in
+        apsd)                   echo "Apple Push Notifications -- iMessage, Mail push, app notifications" ;;
+        softwareupdated)        echo "Software Updates -- downloads macOS and security updates" ;;
+        mobileassetd)           echo "Software Updates -- downloads system data and asset updates" ;;
+        nsurlsessiond)          echo "Background Downloads -- system and app background downloads" ;;
+        mailsync|Mail)          echo "Mail -- syncs your email (may connect to iCloud IMAP)" ;;
+        IMTransferAgent)        echo "iMessage -- sends/receives iMessage file transfers" ;;
+        imagent)                echo "iMessage -- handles iMessage/FaceTime connections" ;;
+        identityservicesd)      echo "iCloud/Handoff -- device identity and Handoff between your devices" ;;
+        cloudd)                 echo "iCloud Drive -- syncs iCloud Drive files" ;;
+        bird)                   echo "iCloud Drive -- background sync for iCloud documents" ;;
+        CalendarAgent)          echo "Calendar -- syncs iCloud Calendar" ;;
+        remindd)                echo "Reminders -- syncs iCloud Reminders" ;;
+        contactsd)              echo "Contacts -- syncs iCloud Contacts" ;;
+        findmydeviced)          echo "Find My -- lets you locate your devices" ;;
+        findmybeaconingd)       echo "Find My -- broadcasts Find My beacon" ;;
+        searchpartyd)           echo "Find My Network -- participates in Find My network for others" ;;
+        passd)                  echo "Wallet -- Apple Wallet and Apple Pay" ;;
+        Maps)                   echo "Maps -- Apple Maps" ;;
+        parsecd)                echo "Siri/Spotlight -- processes search queries and suggestions" ;;
+        assistantd)             echo "Siri -- handles Siri requests" ;;
+        siriknowledged)         echo "Siri -- Siri knowledge and learning" ;;
+        analyticsd)             echo "TELEMETRY -- sends device analytics/diagnostics to Apple" ;;
+        diagnosticd)            echo "TELEMETRY -- collects diagnostic data to send to Apple" ;;
+        symptomsd)              echo "TELEMETRY -- monitors network conditions, reports to Apple" ;;
+        submissionsd)           echo "TELEMETRY -- submits crash reports and diagnostics to Apple" ;;
+        AirPlayXPCHelper)       echo "AirPlay -- discovers and streams to AirPlay devices" ;;
+        AirPlayUIAgent)         echo "AirPlay -- shows AirPlay devices in the UI" ;;
+        rapportd)               echo "Device Discovery -- discovers nearby Apple devices (neighbors too)" ;;
+        AMPDeviceDiscoveryAgent) echo "AirPlay -- discovers AirPlay speakers/TVs" ;;
+        AMPLibraryAgent)        echo "Apple Music -- syncs Apple Music library" ;;
+        amsaccountsd)           echo "App Store -- account authentication" ;;
+        appstoreagent)          echo "App Store -- background processes" ;;
+        storedownloadd)         echo "App Store -- downloads App Store purchases" ;;
+        commerce*)              echo "App Store -- handles purchases and subscriptions" ;;
+        trustd)                 echo "Security -- certificate trust verification (probably should allow)" ;;
+        ocspd)                  echo "Security -- checks certificate revocation (probably should allow)" ;;
+        timed)                  echo "Time Sync -- syncs system clock with Apple time servers" ;;
+        locationd)              echo "Location Services -- provides location data to apps" ;;
+        geod)                   echo "Location Services -- geocoding and map tile downloads" ;;
+        tipsd)                  echo "Tips -- downloads Tips app content" ;;
+        newsd)                  echo "News -- Apple News content" ;;
+        weatherd)               echo "Weather -- fetches weather data" ;;
+        networkserviceproxy)    echo "Network -- iCloud Private Relay / proxy service" ;;
+        biomed|healthd)         echo "Health -- syncs Health data via iCloud" ;;
+        *)
+            local path
+            path=$(ps -c -o comm,args -p "$(pgrep -x "$1" 2>/dev/null | head -1)" 2>/dev/null | tail -1 | awk '{$1=""; print $0}' | xargs 2>/dev/null)
+            if [ -n "$path" ]; then
+                echo "Unknown Apple process -- $path"
+            else
+                echo "Unknown Apple process"
+            fi
+            ;;
+    esac
+}
 
-APPLE_PROCS=(
-    analyticsd
-    diagnosticd
-    symptomsd
-    submissionsd
-    AirPlayXPCHelper
-    AirPlayUIAgent
-    rapportd
-    apsd
-)
+ensure_config() {
+    mkdir -p "$CONFIG_DIR"
+    touch "$ALLOWLIST" "$BLOCKLIST"
+}
+
+is_allowed() {
+    grep -qx "$1" "$ALLOWLIST" 2>/dev/null
+}
+
+is_blocked() {
+    grep -qx "$1" "$BLOCKLIST" 2>/dev/null
+}
+
+APPLE_DOMAINS="
+metrics.apple.com
+metrics.icloud.com
+xp.apple.com
+securemetrics.apple.com
+supportmetrics.apple.com
+diagnosics.apple.com
+idiagnostics.apple.com
+iphonesubmissions.apple.com
+radarsubmissions.apple.com
+bookkeeper.itunes.apple.com
+weather-analytics-events.apple.com
+stats.apple.com
+pancake.apple.com
+feedbackws.icloud.com
+api-glb-ause.smoot.apple.com
+smoot.apple.com
+gsp-ssl.ls.apple.com
+gsp10-ssl.ls.apple.com
+gsp64-ssl.ls.apple.com
+gs-loc.apple.com
+iadsdk.apple.com
+tr.iadsdk.apple.com
+iad.apple.com
+advertising.apple.com
+banners.itunes.apple.com
+api.smoot.apple.com
+configuration.ls.apple.com
+swallow.apple.com
+xp.icloud.com
+experiment.apple.com
+push.apple.com
+courier.push.apple.com
+courier1.push.apple.com
+courier2.push.apple.com
+"
 
 sinkhole_hosts() {
     if grep -q "$MARKER_START" "$HOSTS_FILE" 2>/dev/null; then
         sed -i '' "/$MARKER_START/,/$MARKER_END/d" "$HOSTS_FILE"
     fi
-    {
-        echo "$MARKER_START"
-        for domain in "${APPLE_DOMAINS[@]}"; do
-            [[ "$domain" == \#* ]] && continue
-            echo "0.0.0.0 $domain"
-        done
-        echo "$MARKER_END"
-    } >> "$HOSTS_FILE"
-    local count
-    count=$(grep -c '0.0.0.0' <<< "$(sed -n "/$MARKER_START/,/$MARKER_END/p" "$HOSTS_FILE")")
+    echo "$MARKER_START" >> "$HOSTS_FILE"
+    local count=0
+    for domain in $APPLE_DOMAINS; do
+        [ -z "$domain" ] && continue
+        echo "0.0.0.0 $domain" >> "$HOSTS_FILE"
+        count=$((count + 1))
+    done
+    echo "$MARKER_END" >> "$HOSTS_FILE"
     echo "  /etc/hosts: $count domains sinkholed"
 }
 
@@ -90,10 +143,11 @@ unsinkhole_hosts() {
 }
 
 kill_once() {
-    for proc in "${APPLE_PROCS[@]}"; do
+    while IFS= read -r proc; do
+        [ -z "$proc" ] && continue
         killall -9 "$proc" 2>/dev/null || true
-    done
-    echo "  Killed Apple processes (one-shot)"
+    done < "$BLOCKLIST"
+    echo "  Killed blocked Apple processes (one-shot)"
 }
 
 disable_daemons() {
@@ -118,20 +172,20 @@ enable_daemons() {
     echo "  Re-enabled Apple daemons"
 }
 
-install_kill_daemon() {
-    cat > "$KILL_SCRIPT" <<'KILLEOF'
-#!/bin/bash
-while true; do
-    killall -9 AirPlayXPCHelper 2>/dev/null
-    killall -9 AirPlayUIAgent 2>/dev/null
-    killall -9 rapportd 2>/dev/null
-    killall -9 apsd 2>/dev/null
-    killall -9 analyticsd 2>/dev/null
-    killall -9 symptomsd 2>/dev/null
-    sleep 1
-done
-KILLEOF
+build_kill_script() {
+    echo '#!/bin/bash' > "$KILL_SCRIPT"
+    echo 'while true; do' >> "$KILL_SCRIPT"
+    while IFS= read -r proc; do
+        [ -z "$proc" ] && continue
+        echo "    killall -9 \"$proc\" 2>/dev/null" >> "$KILL_SCRIPT"
+    done < "$BLOCKLIST"
+    echo '    sleep 1' >> "$KILL_SCRIPT"
+    echo 'done' >> "$KILL_SCRIPT"
     chmod +x "$KILL_SCRIPT"
+}
+
+install_kill_daemon() {
+    build_kill_script
 
     cat > "$KILL_PLIST" <<'PLISTEOF'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -163,7 +217,7 @@ PLISTEOF
 }
 
 remove_kill_daemon() {
-    if [[ -f "$KILL_PLIST" ]]; then
+    if [ -f "$KILL_PLIST" ]; then
         launchctl unload "$KILL_PLIST" 2>/dev/null || true
         rm -f "$KILL_PLIST"
         echo "  Kill daemon stopped and removed"
@@ -178,7 +232,157 @@ flush_dns() {
     echo "  DNS cache flushed"
 }
 
-block() {
+scan() {
+    ensure_config
+    echo "Scanning for processes connecting to Apple (17.0.0.0/8)..."
+    echo ""
+
+    local tmpfile
+    tmpfile=$(mktemp)
+    lsof -i -n -P 2>/dev/null | grep "ESTABLISHED\|SYN_SENT" | awk '{print $1 "|" $9}' | while IFS='|' read pname addr; do
+        ip=$(echo "$addr" | sed 's/.*->//' | cut -d: -f1)
+        port=$(echo "$addr" | sed 's/.*://')
+        if echo "$ip" | grep -q "^17\."; then
+            echo "$pname|$ip|$port"
+        fi
+    done | awk -F'|' '!seen[$1]++' > "$tmpfile"
+
+    local total
+    total=$(wc -l < "$tmpfile" | tr -d ' ')
+
+    if [ "$total" -eq 0 ]; then
+        echo "  No processes are currently talking to Apple. You're clean."
+        rm -f "$tmpfile"
+        return
+    fi
+
+    echo "Found $total process(es) talking to Apple:"
+    echo ""
+
+    local new_blocks=0
+    local new_allows=0
+
+    local i=0
+    while IFS='|' read -r proc ip port; do
+        i=$((i + 1))
+        local desc
+        desc=$(describe_proc "$proc")
+        local status_label=""
+
+        if is_allowed "$proc"; then
+            status_label=" [ALLOWED]"
+        elif is_blocked "$proc"; then
+            status_label=" [BLOCKED]"
+        fi
+
+        echo "  $i. $proc -> $ip:$port$status_label"
+        echo "     $desc"
+
+        if [ -n "$status_label" ]; then
+            echo ""
+            continue
+        fi
+
+        while true; do
+            printf "     [a]llow  [b]lock  [s]kip  [?]explain > "
+            read -r choice < /dev/tty
+            case "$choice" in
+                a|A|allow)
+                    echo "$proc" >> "$ALLOWLIST"
+                    echo "     -> Allowed. Won't be blocked."
+                    new_allows=$((new_allows + 1))
+                    break
+                    ;;
+                b|B|block)
+                    echo "$proc" >> "$BLOCKLIST"
+                    echo "     -> Blocked. Will be killed."
+                    new_blocks=$((new_blocks + 1))
+                    break
+                    ;;
+                s|S|skip)
+                    echo "     -> Skipped. Will ask again next scan."
+                    break
+                    ;;
+                "?"|h|help)
+                    echo ""
+                    echo "     ALLOW = let this process connect to Apple. You need this"
+                    echo "       for things like software updates, email, iMessage, etc."
+                    echo "     BLOCK = kill this process and prevent it from running."
+                    echo "       Use for telemetry, analytics, ads, and anything you"
+                    echo "       don't want phoning home."
+                    echo "     SKIP  = decide later. You'll be asked again next scan."
+                    echo ""
+                    ;;
+                *)
+                    echo "     Type a, b, s, or ? for help"
+                    ;;
+            esac
+        done
+        echo ""
+    done < "$tmpfile"
+
+    rm -f "$tmpfile"
+
+    if [ $new_blocks -gt 0 ]; then
+        echo "  $new_blocks new process(es) blocked."
+        echo "  Run 'sudo apple-block on' to apply, or 'sudo apple-block nuclear' to keep them dead."
+    fi
+    if [ $new_allows -gt 0 ]; then
+        echo "  $new_allows new process(es) allowed."
+    fi
+
+    echo ""
+    echo "Your choices are saved in $CONFIG_DIR/"
+    echo "  $ALLOWLIST  -- processes you've approved"
+    echo "  $BLOCKLIST  -- processes that will be killed"
+}
+
+list_config() {
+    ensure_config
+    echo "=== Blocked processes (will be killed) ==="
+    if [ -s "$BLOCKLIST" ]; then
+        while IFS= read -r proc; do
+            [ -z "$proc" ] && continue
+            echo "  $proc -- $(describe_proc "$proc")"
+        done < "$BLOCKLIST"
+    else
+        echo "  (none)"
+    fi
+    echo ""
+    echo "=== Allowed processes (won't be touched) ==="
+    if [ -s "$ALLOWLIST" ]; then
+        while IFS= read -r proc; do
+            [ -z "$proc" ] && continue
+            echo "  $proc -- $(describe_proc "$proc")"
+        done < "$ALLOWLIST"
+    else
+        echo "  (none)"
+    fi
+}
+
+reset_config() {
+    ensure_config
+    cat > "$BLOCKLIST" <<'DEFAULTS'
+analyticsd
+diagnosticd
+symptomsd
+submissionsd
+AirPlayXPCHelper
+AirPlayUIAgent
+rapportd
+apsd
+DEFAULTS
+    > "$ALLOWLIST"
+    echo "  Config reset to defaults (telemetry + AirPlay + push blocked)"
+    echo "  Run 'sudo apple-block scan' to review and customize."
+}
+
+block_cmd() {
+    ensure_config
+    if [ ! -s "$BLOCKLIST" ]; then
+        echo "  No blocklist found, setting defaults..."
+        reset_config
+    fi
     echo "Blocking Apple telemetry..."
     sinkhole_hosts
     flush_dns
@@ -190,13 +394,18 @@ block() {
 }
 
 nuclear() {
+    ensure_config
+    if [ ! -s "$BLOCKLIST" ]; then
+        echo "  No blocklist found, setting defaults..."
+        reset_config
+    fi
     echo "Going nuclear on Apple..."
     sinkhole_hosts
     flush_dns
     disable_daemons
     install_kill_daemon
     echo ""
-    echo "NUCLEAR. Apple processes will be killed every second."
+    echo "NUCLEAR. Blocked processes will be killed every second."
     echo "Run 'sudo apple-block off' to undo everything."
 }
 
@@ -211,28 +420,37 @@ unblock() {
 }
 
 status() {
+    ensure_config
     echo "=== shutupapple status ==="
     if grep -q "$MARKER_START" "$HOSTS_FILE" 2>/dev/null; then
         local count
-        count=$(grep -c '0.0.0.0' <<< "$(sed -n "/$MARKER_START/,/$MARKER_END/p" "$HOSTS_FILE")")
+        count=$(sed -n "/$MARKER_START/,/$MARKER_END/p" "$HOSTS_FILE" | grep -c '0.0.0.0')
         echo "  Hosts sinkhole: ACTIVE ($count domains)"
     else
         echo "  Hosts sinkhole: INACTIVE"
     fi
 
-    if launchctl list com.shutupapple.kill-apple &>/dev/null; then
+    if launchctl list com.shutupapple.kill-apple >/dev/null 2>&1; then
         echo "  Kill daemon: RUNNING (nuclear mode)"
     else
         echo "  Kill daemon: not running"
     fi
 
+    local blocked_count=0
+    [ -s "$BLOCKLIST" ] && blocked_count=$(wc -l < "$BLOCKLIST" | tr -d ' ')
+    local allowed_count=0
+    [ -s "$ALLOWLIST" ] && allowed_count=$(wc -l < "$ALLOWLIST" | tr -d ' ')
+    echo "  Processes: $blocked_count blocked, $allowed_count allowed"
+
     echo "  Active Apple connections (17.* range):"
     local conns
     conns=$(lsof -i -n -P 2>/dev/null | grep "ESTABLISHED" | awk '{print $1, $9}' | while read proc addr; do
         ip=$(echo "$addr" | sed 's/.*->//' | cut -d: -f1)
-        [[ "$ip" == 17.* ]] && echo "    $proc -> $addr"
+        if echo "$ip" | grep -q "^17\."; then
+            echo "    $proc -> $addr"
+        fi
     done)
-    if [[ -z "$conns" ]]; then
+    if [ -z "$conns" ]; then
         echo "    None. Clean."
     else
         echo "$conns"
@@ -240,19 +458,26 @@ status() {
 }
 
 case "${1:-}" in
-    on|block|enable)        block ;;
+    on|block|enable)        block_cmd ;;
     nuclear|nuke|kill)      nuclear ;;
     off|unblock|disable)    unblock ;;
+    scan|audit|check)       scan ;;
+    list|config|show)       list_config ;;
+    reset)                  reset_config ;;
     status)                 status ;;
     *)
         echo "Usage: sudo apple-block <command>"
         echo ""
         echo "Commands:"
-        echo "  on       Block Apple telemetry domains, kill processes once,"
-        echo "           disable daemons for next reboot"
+        echo "  on       Block Apple telemetry domains, kill blocked processes"
+        echo "           once, disable daemons for next reboot"
         echo "  nuclear  All of the above PLUS a persistent kill daemon that"
-        echo "           murders Apple processes every second"
+        echo "           murders blocked processes every second"
         echo "  off      Undo everything, restore Apple services"
+        echo "  scan     Find processes talking to Apple and interactively"
+        echo "           choose to allow or block each one"
+        echo "  list     Show your current allow/block lists"
+        echo "  reset    Reset allow/block lists to defaults"
         echo "  status   Show current state and any active Apple connections"
         exit 1
         ;;
