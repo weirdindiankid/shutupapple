@@ -36,6 +36,12 @@ describe_proc() {
         analyticsd)             echo "TELEMETRY -- sends device analytics/diagnostics to Apple" ;;
         diagnosticd)            echo "TELEMETRY -- collects diagnostic data to send to Apple" ;;
         symptomsd)              echo "TELEMETRY -- monitors network conditions, reports to Apple" ;;
+        symptomsd-diag)         echo "TELEMETRY -- network diagnostics data collection for Apple" ;;
+        audioanalyticsd)        echo "TELEMETRY -- records audio usage patterns, reports to Apple" ;;
+        wifianalyticsd)         echo "TELEMETRY -- tracks wifi usage and connection data for Apple" ;;
+        inputanalyticsd)        echo "TELEMETRY -- tracks keyboard/input patterns, reports to Apple" ;;
+        geoanalyticsd)          echo "TELEMETRY -- tracks location usage patterns for Apple" ;;
+        ecosystemanalyticsd)    echo "TELEMETRY -- cross-device usage tracking across Apple ecosystem" ;;
         submissionsd)           echo "TELEMETRY -- submits crash reports and diagnostics to Apple" ;;
         AirPlayXPCHelper)       echo "AirPlay -- discovers and streams to AirPlay devices" ;;
         AirPlayUIAgent)         echo "AirPlay -- shows AirPlay devices in the UI" ;;
@@ -371,6 +377,12 @@ AirPlayXPCHelper
 AirPlayUIAgent
 rapportd
 apsd
+symptomsd-diag
+audioanalyticsd
+wifianalyticsd
+inputanalyticsd
+geoanalyticsd
+ecosystemanalyticsd
 DEFAULTS
     > "$ALLOWLIST"
     echo "  Config reset to defaults (telemetry + AirPlay + push blocked)"
