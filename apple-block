@@ -62,7 +62,7 @@ describe_proc() {
         weatherd)               echo "Weather -- fetches weather data" ;;
         networkserviceproxy)    echo "Network -- iCloud Private Relay / proxy service" ;;
         biomed|healthd)         echo "Health -- syncs Health data via iCloud" ;;
-        syspolicyd)             echo "TELEMETRY -- system policy checks, phones home to Apple" ;;
+        syspolicyd)             echo "Gatekeeper -- verifies app signatures at launch (must allow)" ;;
         CloudTelemetry*)        echo "TELEMETRY -- iCloud telemetry data collection" ;;
         transparencyd)          echo "TELEMETRY -- certificate transparency logging to Apple" ;;
         idleassetsd)            echo "Background Downloads -- downloads assets when device is idle" ;;
@@ -393,7 +393,6 @@ wifianalyticsd
 inputanalyticsd
 geoanalyticsd
 ecosystemanalyticsd
-syspolicyd
 CloudTelemetry
 cloudd
 transparencyd
