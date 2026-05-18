@@ -195,16 +195,20 @@ build_kill_script() {
 GREP=/usr/bin/grep
 ALLOWLIST="/usr/local/etc/shutupapple/allowed"
 BLOCKLIST="/usr/local/etc/shutupapple/blocked"
+n=0
 while true; do
     while IFS= read -r proc; do
         [ -z "$proc" ] && continue
         killall -9 "$proc" 2>/dev/null
     done < "$BLOCKLIST"
-    lsof +c 0 -i -n -P 2>/dev/null | $GREP -E '>17\.' | $GREP -E 'ESTABLISHED|SYN_SENT' | awk '{print $1, $2}' | sort -u -k2,2 | while read -r proc pid; do
-        $GREP -qx "$proc" "$ALLOWLIST" 2>/dev/null && continue
-        kill -9 "$pid" 2>/dev/null
-    done
-    sleep 1
+    n=$((n + 1))
+    if [ $((n % 5)) -eq 0 ]; then
+        lsof +c 0 -i -n -P 2>/dev/null | $GREP -E '>17\.' | $GREP -E 'ESTABLISHED|SYN_SENT' | awk '{print $1, $2}' | sort -u -k2,2 | while read -r proc pid; do
+            $GREP -qx "$proc" "$ALLOWLIST" 2>/dev/null && continue
+            kill -9 "$pid" 2>/dev/null
+        done
+    fi
+    sleep 0.2
 done
 SCRIPTEOF
     chmod +x "$KILL_SCRIPT"
