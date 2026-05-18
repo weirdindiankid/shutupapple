@@ -106,15 +106,42 @@ ssh root@192.168.8.1 'apple-block-router status'  # check
 
 ## Optional: pf firewall rules for AirPlay
 
-If you want to block AirPlay device discovery at the network level (so your neighbors' Apple TVs stop showing up as audio outputs), add the following to `/etc/pf.conf` after all `dummynet-anchor` lines but before any `anchor` lines:
+If you want to block AirPlay device discovery at the network level (so your neighbors' Apple TVs stop showing up as audio outputs), add the following to `/etc/pf.conf` after all `dummynet-anchor` lines but before any `anchor` lines.
+
+First, allow local traffic on AirPlay ports so dev servers and Docker still work:
 
 ```
-block drop out quick proto udp to 224.0.0.251 port 5353
-block drop in quick proto udp from 224.0.0.251 port 5353
-block drop out quick proto tcp to any port 7000
-block drop out quick proto tcp to any port 7100
-block drop out quick proto udp to any port 7000
-block drop out quick proto udp to any port 7011
+pass out quick proto tcp to 127.0.0.0/8 port 7000
+pass out quick proto tcp to 127.0.0.0/8 port 7100
+pass out quick proto tcp to 192.168.0.0/16 port 7000
+pass out quick proto tcp to 192.168.0.0/16 port 7100
+pass out quick proto tcp to 10.0.0.0/8 port 7000
+pass out quick proto tcp to 10.0.0.0/8 port 7100
+pass out quick proto tcp to 172.16.0.0/12 port 7000
+pass out quick proto tcp to 172.16.0.0/12 port 7100
+```
+
+Then block AirPlay on physical/wireless interfaces. Rules are scoped to `en0`, `awdl0`, and `llw0` so VPN tunnel traffic (`utun*`) is not affected -- without this scoping, Mullvad and other VPN clients will experience intermittent disconnections during tunnel renegotiation:
+
+```
+block drop out quick on en0 proto udp to 224.0.0.251 port 5353
+block drop in quick on en0 proto udp from 224.0.0.251 port 5353
+block drop out quick on awdl0 proto udp to 224.0.0.251 port 5353
+block drop in quick on awdl0 proto udp from 224.0.0.251 port 5353
+block drop out quick on llw0 proto udp to 224.0.0.251 port 5353
+block drop in quick on llw0 proto udp from 224.0.0.251 port 5353
+block drop out quick on en0 proto tcp to any port 7000
+block drop out quick on en0 proto tcp to any port 7100
+block drop out quick on en0 proto udp to any port 7000
+block drop out quick on en0 proto udp to any port 7011
+block drop out quick on awdl0 proto tcp to any port 7000
+block drop out quick on awdl0 proto tcp to any port 7100
+block drop out quick on awdl0 proto udp to any port 7000
+block drop out quick on awdl0 proto udp to any port 7011
+block drop out quick on llw0 proto tcp to any port 7000
+block drop out quick on llw0 proto tcp to any port 7100
+block drop out quick on llw0 proto udp to any port 7000
+block drop out quick on llw0 proto udp to any port 7011
 ```
 
 Then reload with `sudo pfctl -f /etc/pf.conf`.
