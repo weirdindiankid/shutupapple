@@ -190,14 +190,23 @@ enable_daemons() {
 }
 
 build_kill_script() {
-    echo '#!/bin/bash' > "$KILL_SCRIPT"
-    echo 'while true; do' >> "$KILL_SCRIPT"
+    cat > "$KILL_SCRIPT" <<'SCRIPTEOF'
+#!/bin/bash
+GREP=/usr/bin/grep
+ALLOWLIST="/usr/local/etc/shutupapple/allowed"
+BLOCKLIST="/usr/local/etc/shutupapple/blocked"
+while true; do
     while IFS= read -r proc; do
         [ -z "$proc" ] && continue
-        echo "    killall -9 \"$proc\" 2>/dev/null" >> "$KILL_SCRIPT"
+        killall -9 "$proc" 2>/dev/null
     done < "$BLOCKLIST"
-    echo '    sleep 1' >> "$KILL_SCRIPT"
-    echo 'done' >> "$KILL_SCRIPT"
+    lsof +c 0 -i -n -P 2>/dev/null | $GREP -E '>17\.' | $GREP -E 'ESTABLISHED|SYN_SENT' | awk '{print $1, $2}' | sort -u -k2,2 | while read -r proc pid; do
+        $GREP -qx "$proc" "$ALLOWLIST" 2>/dev/null && continue
+        kill -9 "$pid" 2>/dev/null
+    done
+    sleep 1
+done
+SCRIPTEOF
     chmod +x "$KILL_SCRIPT"
 }
 
@@ -306,7 +315,7 @@ scan() {
             case "$choice" in
                 a|A|allow)
                     echo "$proc" >> "$ALLOWLIST"
-                    echo "     -> Allowed. Won't be blocked."
+                    echo "     -> Allowed. Won't be killed."
                     new_allows=$((new_allows + 1))
                     break
                     ;;
@@ -317,7 +326,7 @@ scan() {
                     break
                     ;;
                 s|S|skip)
-                    echo "     -> Skipped. Will ask again next scan."
+                    echo "     -> Skipped. NOTE: in nuclear mode, this will be auto-killed."
                     break
                     ;;
                 "?"|h|help)
@@ -327,7 +336,8 @@ scan() {
                     echo "     BLOCK = kill this process and prevent it from running."
                     echo "       Use for telemetry, analytics, ads, and anything you"
                     echo "       don't want phoning home."
-                    echo "     SKIP  = decide later. You'll be asked again next scan."
+                    echo "     SKIP  = decide later. In nuclear mode, skipped processes"
+                    echo "       will be auto-killed (default deny)."
                     echo ""
                     ;;
                 *)
@@ -407,8 +417,16 @@ familycircled
 networkserviceproxy
 amsengagementd
 DEFAULTS
-    > "$ALLOWLIST"
+    cat > "$ALLOWLIST" <<'ALLOW_DEFAULTS'
+trustd
+ocspd
+mDNSResponder
+syspolicyd
+softwareupdated
+timed
+ALLOW_DEFAULTS
     echo "  Config reset to defaults (telemetry + AirPlay + push blocked)"
+    echo "  Essential system processes allowed (trustd, DNS, Gatekeeper, updates, NTP)"
     echo "  Run 'sudo apple-block scan' to review and customize."
 }
 
@@ -440,7 +458,9 @@ nuclear() {
     disable_daemons
     install_kill_daemon
     echo ""
-    echo "NUCLEAR. Blocked processes will be killed every second."
+    echo "NUCLEAR. Known bad processes killed every second."
+    echo "Any unknown process connecting to Apple (17.0.0.0/8) will also be killed."
+    echo "  Allowed: $(tr '\n' ',' < "$ALLOWLIST" | sed 's/,$//' | sed 's/,/, /g')"
     echo "Run 'sudo apple-block off' to undo everything."
 }
 
@@ -506,8 +526,8 @@ case "${1:-}" in
         echo "Commands:"
         echo "  on       Block Apple telemetry domains, kill blocked processes"
         echo "           once, disable daemons for next reboot"
-        echo "  nuclear  All of the above PLUS a persistent kill daemon that"
-        echo "           murders blocked processes every second"
+        echo "  nuclear  All of the above PLUS a persistent daemon that kills"
+        echo "           blocked processes and any unknown process talking to Apple"
         echo "  off      Undo everything, restore Apple services"
         echo "  scan     Find processes talking to Apple and interactively"
         echo "           choose to allow or block each one"

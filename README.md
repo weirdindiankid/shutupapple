@@ -7,10 +7,10 @@ A toggleable script that blocks Apple telemetry, analytics, AirPlay discovery, p
 ## What it does
 
 - Sinkholes 34+ known Apple telemetry/analytics/tracking/ads/push domains via `/etc/hosts`
-- Kills Apple spyware processes: `analyticsd`, `diagnosticd`, `symptomsd`, `submissionsd`, `apsd`, `AirPlayXPCHelper`, `AirPlayUIAgent`, `rapportd`
+- Kills 26+ known Apple spyware processes on sight
 - Disables those daemons across reboots via `launchctl disable`
-- Nuclear mode: installs a root LaunchDaemon that kills Apple processes every second so they can't respawn (SIP keeps them alive until reboot otherwise)
-- Interactive scanner that finds ANY process talking to Apple and lets you allow or block it -- catches new processes Apple sneaks in with future updates
+- Nuclear mode: **allowlist-based** -- kills ANY process connecting to Apple (17.0.0.0/8) unless you've explicitly allowed it. No more whack-a-mole when Apple adds new telemetry in updates.
+- Interactive scanner that finds processes talking to Apple and lets you allow or block each one
 - Fully reversible with a single command
 
 ## Install
