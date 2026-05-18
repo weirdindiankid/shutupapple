@@ -198,10 +198,8 @@ ALLOWLIST="/usr/local/etc/shutupapple/allowed"
 BLOCKLIST="/usr/local/etc/shutupapple/blocked"
 n=0
 while true; do
-    while IFS= read -r proc; do
-        [ -z "$proc" ] && continue
-        killall -9 "$proc" 2>/dev/null
-    done < "$BLOCKLIST"
+    pattern=$(tr '\n' '|' < "$BLOCKLIST" | sed 's/|$//')
+    [ -n "$pattern" ] && pkill -9 -x "$pattern" 2>/dev/null
     n=$((n + 1))
     if [ $((n % 5)) -eq 0 ]; then
         lsof +c 0 -i -n -P 2>/dev/null | $GREP -E '>17\.' | $GREP -E 'ESTABLISHED|SYN_SENT' | awk '{print $1, $2}' | sort -u -k2,2 | while read -r proc pid; do
