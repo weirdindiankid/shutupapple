@@ -168,24 +168,24 @@ kill_once() {
 }
 
 disable_daemons() {
-    launchctl disable system/com.apple.apsd 2>/dev/null || true
-    launchctl disable system/com.apple.AirPlayXPCHelper 2>/dev/null || true
-    launchctl disable system/com.apple.rapportd 2>/dev/null || true
     local uid
     uid=$(id -u)
-    launchctl disable "gui/$uid/com.apple.AirPlayUIAgent" 2>/dev/null || true
-    launchctl disable "gui/$uid/com.apple.rapportd" 2>/dev/null || true
-    echo "  Disabled Apple daemons (persistent across reboots)"
+    while IFS= read -r proc; do
+        [ -z "$proc" ] && continue
+        launchctl disable "system/com.apple.$proc" 2>/dev/null || true
+        launchctl disable "gui/$uid/com.apple.$proc" 2>/dev/null || true
+    done < "$BLOCKLIST"
+    echo "  Disabled blocked daemons via launchctl (persistent across reboots)"
 }
 
 enable_daemons() {
-    launchctl enable system/com.apple.apsd 2>/dev/null || true
-    launchctl enable system/com.apple.AirPlayXPCHelper 2>/dev/null || true
-    launchctl enable system/com.apple.rapportd 2>/dev/null || true
     local uid
     uid=$(id -u)
-    launchctl enable "gui/$uid/com.apple.AirPlayUIAgent" 2>/dev/null || true
-    launchctl enable "gui/$uid/com.apple.rapportd" 2>/dev/null || true
+    while IFS= read -r proc; do
+        [ -z "$proc" ] && continue
+        launchctl enable "system/com.apple.$proc" 2>/dev/null || true
+        launchctl enable "gui/$uid/com.apple.$proc" 2>/dev/null || true
+    done < "$BLOCKLIST"
     echo "  Re-enabled Apple daemons"
 }
 
