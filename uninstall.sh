@@ -20,6 +20,13 @@ if [[ -f "$PLIST" ]]; then
     echo "  Removed kill daemon"
 fi
 
+PF_PLIST="/Library/LaunchDaemons/com.shutupapple.pf-restore.plist"
+if [[ -f "$PF_PLIST" ]]; then
+    launchctl unload "$PF_PLIST" 2>/dev/null || true
+    rm -f "$PF_PLIST"
+    echo "  Removed pf restore daemon"
+fi
+
 AGENT="$REAL_HOME/Library/LaunchAgents/com.shutupapple.check.plist"
 if [[ -f "$AGENT" ]]; then
     sudo -u "$REAL_USER" launchctl unload "$AGENT" 2>/dev/null || true

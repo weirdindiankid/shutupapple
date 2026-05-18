@@ -9,6 +9,7 @@ KILL_PLIST="/Library/LaunchDaemons/com.shutupapple.kill-apple.plist"
 CONFIG_DIR="/usr/local/etc/shutupapple"
 ALLOWLIST="$CONFIG_DIR/allowed"
 BLOCKLIST="$CONFIG_DIR/blocked"
+PF_BACKUP="$CONFIG_DIR/pf.conf"
 
 describe_proc() {
     case "$1" in
@@ -521,6 +522,26 @@ status() {
     fi
 }
 
+pf_save() {
+    ensure_config
+    cp /etc/pf.conf "$PF_BACKUP"
+    echo "  Saved /etc/pf.conf to $PF_BACKUP"
+}
+
+pf_restore() {
+    if [ ! -f "$PF_BACKUP" ]; then
+        echo "  No saved pf.conf found. Run 'sudo apple-block pf-save' first."
+        return 1
+    fi
+    if cmp -s /etc/pf.conf "$PF_BACKUP"; then
+        echo "  /etc/pf.conf is unchanged."
+        return 0
+    fi
+    cp "$PF_BACKUP" /etc/pf.conf
+    pfctl -f /etc/pf.conf 2>/dev/null
+    echo "  Restored /etc/pf.conf from backup and reloaded pf."
+}
+
 case "${1:-}" in
     on|block|enable)        block_cmd ;;
     nuclear|nuke|kill)      nuclear ;;
@@ -529,6 +550,8 @@ case "${1:-}" in
     list|config|show)       list_config ;;
     reset)                  reset_config ;;
     status)                 status ;;
+    pf-save)                pf_save ;;
+    pf-restore)             pf_restore ;;
     *)
         echo "Usage: sudo apple-block <command>"
         echo ""
@@ -543,6 +566,8 @@ case "${1:-}" in
         echo "  list     Show your current allow/block lists"
         echo "  reset    Reset allow/block lists to defaults"
         echo "  status   Show current state and any active Apple connections"
+        echo "  pf-save  Save current /etc/pf.conf (so it survives macOS updates)"
+        echo "  pf-restore  Restore saved /etc/pf.conf if Apple wiped it"
         exit 1
         ;;
 esac

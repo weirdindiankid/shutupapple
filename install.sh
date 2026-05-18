@@ -27,11 +27,19 @@ chown "$REAL_USER" "$AGENT_DIR/com.shutupapple.check.plist"
 sudo -u "$REAL_USER" launchctl load "$AGENT_DIR/com.shutupapple.check.plist" 2>/dev/null || true
 echo "  Installed login checker (alerts you if a macOS update wipes protections)"
 
+PF_PLIST="/Library/LaunchDaemons/com.shutupapple.pf-restore.plist"
+cp "$SCRIPT_DIR/com.shutupapple.pf-restore.plist" "$PF_PLIST"
+chown root:wheel "$PF_PLIST"
+chmod 644 "$PF_PLIST"
+launchctl load "$PF_PLIST" 2>/dev/null || true
+echo "  Installed pf.conf restore daemon (restores custom firewall rules on boot)"
+
 echo ""
 echo "Installed. Now run:"
 echo "  sudo apple-block on        # block Apple telemetry"
 echo "  sudo apple-block nuclear   # block + kill daemon (recommended)"
 echo "  sudo apple-block scan      # find and block new Apple processes"
+echo "  sudo apple-block pf-save   # save your /etc/pf.conf so it survives updates"
 echo "  sudo apple-block status    # verify"
 echo ""
 echo "After macOS updates, the login checker will alert you if"
