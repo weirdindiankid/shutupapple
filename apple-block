@@ -428,6 +428,11 @@ mDNSResponder
 syspolicyd
 softwareupdated
 timed
+Xcode
+xcodebuild
+XCBBuildService
+IBAgent
+SourceKitService
 ALLOW_DEFAULTS
     echo "  Config reset to defaults (telemetry + AirPlay + push blocked)"
     echo "  Essential system processes allowed (trustd, DNS, Gatekeeper, updates, NTP)"
