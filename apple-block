@@ -416,6 +416,7 @@ akd
 familycircled
 networkserviceproxy
 amsengagementd
+nsurlsessiond
 DEFAULTS
     cat > "$ALLOWLIST" <<'ALLOW_DEFAULTS'
 trustd
