@@ -1,13 +1,13 @@
 # shutupapple
 
-Fuck off for not allowing me sovereignty over my own device, Apple.
+I wanted to have audio routed through my Airpods. Apple routed it through my neighbour's AppleTV somehow. This was with WiFi turned off. So I turned off Bluetooth and WiFi. I saw my neighbour's AppleTV still listed. Hence `shutupapple`.
 
-A toggleable script that blocks Apple telemetry, analytics, AirPlay discovery, push notifications, and every other phone-home process that Apple forces onto your Mac without your consent. Works on any Mac running macOS 10.15+.
+This is a toggleable script that blocks Apple telemetry, analytics, AirPlay discovery, push notifications, and every other phone-home process that Apple forces onto your Mac without your consent. Works on any Mac running macOS 10.15+.
 
-## What it does
+## Bird's-eye View
 
 - Sinkholes 34+ known Apple telemetry/analytics/tracking/ads/push domains via `/etc/hosts`
-- Kills 26+ known Apple spyware processes on sight
+- Kills 26+ known Apple processes on sight that do not meaningfully impact user experience
 - Disables those daemons across reboots via `launchctl disable`
 - Nuclear mode: **allowlist-based** -- kills ANY process connecting to Apple (17.0.0.0/8) unless you've explicitly allowed it. No more whack-a-mole when Apple adds new telemetry in updates.
 - Interactive scanner that finds processes talking to Apple and lets you allow or block each one
@@ -16,7 +16,7 @@ A toggleable script that blocks Apple telemetry, analytics, AirPlay discovery, p
 ## Install
 
 ```bash
-git clone <this-repo> shutupapple
+git clone git@github.com:weirdindiankid/shutupapple.git
 cd shutupapple
 sudo ./install.sh
 ```
@@ -53,7 +53,7 @@ sudo apple-block reset
 Run `sudo apple-block scan` after macOS updates or whenever you suspect new processes are phoning home. It finds every process with an active connection to Apple's IP range (17.0.0.0/8) and shows you what each one does:
 
 ```
-Found 3 process(es) talking to Apple:
+Found 2 process(es) talking to Apple:
 
   1. softwareupdated -> 17.253.18.42:443
      Software Updates -- downloads macOS and security updates
@@ -62,9 +62,6 @@ Found 3 process(es) talking to Apple:
   2. analyticsd -> 17.249.60.11:443 [BLOCKED]
      TELEMETRY -- sends device analytics/diagnostics to Apple
 
-  3. mailsync -> 17.57.155.39:993
-     Mail -- syncs your email (may connect to iCloud IMAP)
-     [a]llow  [b]lock  [s]kip  [?]explain >
 ```
 
 Your choices are saved to `/usr/local/etc/shutupapple/` and persist across runs. The `nuclear` and `on` commands read from this blocklist, so new processes you block via `scan` get picked up automatically.

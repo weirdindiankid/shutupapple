@@ -400,7 +400,6 @@ submissionsd
 AirPlayXPCHelper
 AirPlayUIAgent
 rapportd
-apsd
 symptomsd-diag
 audioanalyticsd
 wifianalyticsd
@@ -408,7 +407,6 @@ inputanalyticsd
 geoanalyticsd
 ecosystemanalyticsd
 CloudTelemetry
-cloudd
 transparencyd
 idleassetsd
 iCloudNotificationAgent
@@ -427,14 +425,23 @@ mDNSResponder
 syspolicyd
 softwareupdated
 timed
+dataaccessd
 Xcode
 xcodebuild
 XCBBuildService
 IBAgent
 SourceKitService
+librewolf
+LibreWolf
+plugin-container
+findmydeviced
+apsd
+cloudd
+bird
+identityservicesd
 ALLOW_DEFAULTS
-    echo "  Config reset to defaults (telemetry + AirPlay + push blocked)"
-    echo "  Essential system processes allowed (trustd, DNS, Gatekeeper, updates, NTP)"
+    echo "  Config reset to defaults (telemetry + AirPlay blocked)"
+    echo "  iCloud, Find My, and essential system processes allowed"
     echo "  Run 'sudo apple-block scan' to review and customize."
 }
 
