@@ -196,16 +196,19 @@ build_kill_script() {
 GREP=/usr/bin/grep
 ALLOWLIST="/usr/local/etc/shutupapple/allowed"
 BLOCKLIST="/usr/local/etc/shutupapple/blocked"
+pattern=$(tr '\n' '|' < "$BLOCKLIST" | sed 's/|$//')
 n=0
 while true; do
-    pattern=$(tr '\n' '|' < "$BLOCKLIST" | sed 's/|$//')
     [ -n "$pattern" ] && pkill -9 -x "$pattern" 2>/dev/null
     n=$((n + 1))
     if [ $((n % 5)) -eq 0 ]; then
-        lsof +c 0 -i -n -P 2>/dev/null | $GREP -E '>17\.' | $GREP -E 'ESTABLISHED|SYN_SENT' | awk '{print $1, $2}' | sort -u -k2,2 | while read -r proc pid; do
+        pattern=$(tr '\n' '|' < "$BLOCKLIST" | sed 's/|$//')
+        while IFS= read -r line; do
+            proc=${line%% *}
+            pid=${line##* }
             $GREP -qx "$proc" "$ALLOWLIST" 2>/dev/null && continue
             kill -9 "$pid" 2>/dev/null
-        done
+        done <<< "$(lsof +c 0 -i -n -P 2>/dev/null | $GREP -E '>17\.' | $GREP -E 'ESTABLISHED|SYN_SENT' | awk '{print $1, $2}' | sort -u -k2,2)"
     fi
     sleep 0.2
 done
